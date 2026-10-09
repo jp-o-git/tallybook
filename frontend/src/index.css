@@ -1,0 +1,28 @@
+@import 'tailwindcss';
+
+h1 {
+  font-family: Georgia, serif;
+  font-weight: normal;
+  font-size: 2.75rem;
+}
+
+.Georgia {
+  font-family: Georgia, serif;
+}
+
+p {
+  font-family: Arial, sans-serif;
+}
+
+.label {
+  color: #77736b;
+}
+
+.btn-dark-blue {
+  background-color: #002244;
+  color: #ffffff;
+}
+
+.btn-dark-blue:hover {
+  background-color: #013b75;
+}
