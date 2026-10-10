@@ -1,97 +1,153 @@
-import Button from '../components/Button'
-import PageLabel from '../components/PageLabel'
-import Dropdown from '../components/Dropdown'
-import SearchBar from '../components/SearchBar'
-import Table, { type Product } from '../components/Table'
-import AddProductModal from '../components/AddProductModal'
+import Button from "../components/Button";
+import PageLabel from "../components/PageLabel";
+import Dropdown from "../components/Dropdown";
+import SearchBar from "../components/SearchBar";
+import Table, { type Product } from "../components/Table";
+import AddProductModal from "../components/AddProductModal";
 
-import { useMemo, useState } from 'react'
-
-const products: Product[] = [
-  {
-    id: 1,
-    itemID: 'RICE-005',
-    name: 'Jasmine Rice (5kg)',
-    category: 'Pantry',
-    price: 389,
-    inStock: 10,
-    reOrderAt: 10,
-  },
-  {
-    id: 2,
-    itemID: 'CIT-500',
-    name: 'Calamansi Juice (500ml)',
-    category: 'Drinks',
-    price: 85,
-    inStock: 0,
-    reOrderAt: 12,
-  },
-  {
-    id: 3,
-    itemID: 'MIX-PAN',
-    name: 'Pandesal Mix (1kg)',
-    category: 'Pantry',
-    price: 120,
-    inStock: 3,
-    reOrderAt: 6,
-  },
-  {
-    id: 4,
-    itemID: 'TUN-180',
-    name: 'Canned Tuna (180g)',
-    category: 'Pantry',
-    price: 42.5,
-    inStock: 4,
-    reOrderAt: 20,
-  },
-  {
-    id: 5,
-    itemID: 'COF-250',
-    name: 'Barako Coffee (250g)',
-    category: 'Drinks',
-    price: 210,
-    inStock: 18,
-    reOrderAt: 8,
-  },
-]
+import { useEffect, useMemo, useState } from "react";
+import {
+  getProducts,
+  createProduct,
+  updateProduct,
+} from "../services/products";
 
 export default function ProductsPage() {
-  const [items, setItems] = useState<Product[]>(products)
-  const [adding, setAdding] = useState(false)
-  const [category, setCategory] = useState('all')
-  const [search, setSearch] = useState('')
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [items, setItems] = useState<Product[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [category, setCategory] = useState("all");
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const data = await getProducts();
+
+        const mappedProducts: Product[] = data.map((product) => ({
+          id: product.id,
+          itemID: product.sku,
+          name: product.products,
+          category: product.category,
+          price: Number(product.price),
+          inStock: product.stocks,
+          reOrderAt: product.reorder_at,
+          stockStatus: product.stock_status,
+        }));
+
+        setItems(mappedProducts);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Something went wrong while loading products.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadProducts();
+  }, []);
 
   const visible = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = search.trim().toLowerCase();
 
     return items
       .filter((p) => {
         const matchesCategory =
-          category === 'all' || p.category.toLowerCase() === category
+          category === "all" || p.category.toLowerCase() === category;
+
         const matchesText =
-          q === '' ||
+          q === "" ||
           p.name.toLowerCase().includes(q) ||
-          p.itemID.toLowerCase().includes(q)
+          p.itemID.toLowerCase().includes(q);
 
-        return matchesCategory && matchesText
+        return matchesCategory && matchesText;
       })
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [items, search, category])
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [items, search, category]);
 
-  function handleAdd(data: Omit<Product, 'id'>) {
-    // Temporary id. The backend will assign the real one later.
-    setItems((prev) => [
-      ...prev,
-      { ...data, id: Math.max(0, ...prev.map((p) => p.id)) + 1 },
-    ])
-    setAdding(false)
+  type ProductFormData = Omit<Product, "id" | "stockStatus">;
+
+  async function handleAdd(data: ProductFormData) {
+    try {
+      const created = await createProduct({
+        sku: data.itemID,
+        products: data.name,
+        category: data.category,
+        price: data.price,
+        stock: data.inStock,
+        reorder_at: data.reOrderAt,
+      });
+
+      const newProduct: Product = {
+        id: created.id,
+        itemID: created.sku,
+        name: created.products,
+        category: created.category,
+        price: Number(created.price),
+        inStock: created.stocks,
+        reOrderAt: created.reorder_at,
+        stockStatus: created.stock_status,
+      };
+
+      setItems((prev) => [...prev, newProduct]);
+      setAdding(false);
+    } catch (err) {
+      console.error("Failed to create product:", err);
+      alert(err instanceof Error ? err.message : "Failed to create product.");
+    }
+  }
+
+  async function handleSave(data: ProductFormData) {
+    try {
+      if (editingProduct) {
+        const updated = await updateProduct(String(editingProduct.id), {
+          sku: data.itemID,
+          products: data.name,
+          category: data.category,
+          price: data.price,
+          stocks: data.inStock,
+          reorder_at: data.reOrderAt,
+        });
+
+        const updatedProduct: Product = {
+          id: updated.id,
+          itemID: updated.sku,
+          name: updated.products,
+          category: updated.category,
+          price: Number(updated.price),
+          inStock: updated.stocks,
+          reOrderAt: updated.reorder_at,
+          stockStatus: updated.stock_status,
+        };
+
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === updatedProduct.id ? updatedProduct : item,
+          ),
+        );
+
+        setEditingProduct(null);
+      } else {
+        await handleAdd(data);
+      }
+    } catch (err) {
+      console.error("Failed to save product:", err);
+      alert(err instanceof Error ? err.message : "Failed to save product.");
+    }
   }
 
   return (
     <section>
       <PageLabel Heading="Products" SubHeading="Inventory" />
 
-      {/* Toolbar: filters on the left, primary action on the right */}
       <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-4 sm:max-w-2xl sm:flex-1 sm:flex-row sm:items-end">
           <div className="sm:flex-1">
@@ -103,9 +159,9 @@ export default function ProductsPage() {
               value={category}
               onChange={setCategory}
               options={[
-                { value: 'all', label: 'All categories' },
-                { value: 'pantry', label: 'Pantry' },
-                { value: 'drinks', label: 'Drinks' },
+                { value: "all", label: "All categories" },
+                { value: "pantry", label: "Pantry" },
+                { value: "drinks", label: "Drinks" },
               ]}
             />
           </div>
@@ -114,24 +170,41 @@ export default function ProductsPage() {
         <Button Label="Add Product" onClick={() => setAdding(true)} />
       </div>
 
-      {/* Product list */}
       <div className="mt-6">
-        {visible.length === 0 ? (
+        {loading ? (
+          <p className="border-y border-gray-300 py-10 text-center text-gray-500">
+            Loading products...
+          </p>
+        ) : error ? (
+          <p className="border-y border-red-300 py-10 text-center text-red-600">
+            Failed to load products: {error}
+          </p>
+        ) : visible.length === 0 ? (
           <p className="border-y border-gray-300 py-10 text-center text-gray-500">
             No products match your search.
           </p>
         ) : (
-          <Table type="products" items={visible} />
+          <Table
+            type="products"
+            items={visible}
+            onEdit={(product) => setEditingProduct(product)}
+          />
         )}
       </div>
 
-      {adding && (
+      {(adding || editingProduct !== null) && (
         <AddProductModal
-          existingSkus={items.map((p) => p.itemID)}
-          onSubmit={handleAdd}
-          onClose={() => setAdding(false)}
+          existingSkus={items
+            .filter((p) => p.id !== editingProduct?.id)
+            .map((p) => p.itemID)}
+          initialProduct={editingProduct ?? undefined}
+          onSubmit={handleSave}
+          onClose={() => {
+            setAdding(false);
+            setEditingProduct(null);
+          }}
         />
       )}
     </section>
-  )
+  );
 }

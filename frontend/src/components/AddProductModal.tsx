@@ -1,52 +1,70 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
-import Modal from './Modal'
-import Button from './Button'
-import type { Product } from './Table'
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import Modal from "./Modal";
+import Button from "./Button";
+import type { Product } from "./Table";
 
-const categories = ['Pantry', 'Drinks']
+const categories = ["Pantry", "Drinks"];
 
 type Values = {
-  name: string
-  itemID: string
-  category: string
-  price: string
-  inStock: string
-  reOrderAt: string
-}
-type Errors = Partial<Record<keyof Values, string>>
+  name: string;
+  itemID: string;
+  category: string;
+  price: string;
+  inStock: string;
+  reOrderAt: string;
+};
+
+type Errors = Partial<Record<keyof Values, string>>;
 
 const emptyValues: Values = {
-  name: '',
-  itemID: '',
-  category: '',
-  price: '',
-  inStock: '0',
-  reOrderAt: '0',
-}
+  name: "",
+  itemID: "",
+  category: "",
+  price: "",
+  inStock: "0",
+  reOrderAt: "0",
+};
 
 const isCount = (s: string) =>
-  s.trim() !== '' && Number.isInteger(Number(s)) && Number(s) >= 0
+  s.trim() !== "" && Number.isInteger(Number(s)) && Number(s) >= 0;
 
-function validate(v: Values, existingSkus: string[]): Errors {
-  const errors: Errors = {}
-  const sku = v.itemID.trim().toUpperCase()
-  const price = Number(v.price)
+function validate(
+  v: Values,
+  existingSkus: string[],
+  currentSku?: string,
+): Errors {
+  const errors: Errors = {};
+  const sku = v.itemID.trim().toUpperCase();
+  const price = Number(v.price);
+  const originalSku = currentSku?.trim().toUpperCase();
 
-  if (!v.name.trim()) errors.name = 'Enter a product name.'
+  if (!v.name.trim()) errors.name = "Enter a product name.";
 
-  if (!sku) errors.itemID = 'Enter a SKU.'
-  else if (existingSkus.some((s) => s.toUpperCase() === sku))
-    errors.itemID = 'This SKU already exists.'
+  if (!sku) {
+    errors.itemID = "Enter a SKU.";
+  } else if (
+    existingSkus.some(
+      (s) => s.toUpperCase() === sku && s.toUpperCase() !== originalSku,
+    )
+  ) {
+    errors.itemID = "This SKU already exists.";
+  }
 
-  if (!v.category) errors.category = 'Choose a category.'
+  if (!v.category) errors.category = "Choose a category.";
 
-  if (v.price.trim() === '' || Number.isNaN(price) || price <= 0)
-    errors.price = 'Enter a price above 0.'
+  if (v.price.trim() === "" || Number.isNaN(price) || price <= 0) {
+    errors.price = "Enter a price above 0.";
+  }
 
-  if (!isCount(v.inStock)) errors.inStock = 'Whole number, 0 or more.'
-  if (!isCount(v.reOrderAt)) errors.reOrderAt = 'Whole number, 0 or more.'
+  if (!isCount(v.inStock)) {
+    errors.inStock = "Whole number, 0 or more.";
+  }
 
-  return errors
+  if (!isCount(v.reOrderAt)) {
+    errors.reOrderAt = "Whole number, 0 or more.";
+  }
+
+  return errors;
 }
 
 function Field({
@@ -54,9 +72,9 @@ function Field({
   error,
   children,
 }: {
-  label: string
-  error?: string
-  children: ReactNode
+  label: string;
+  error?: string;
+  children: ReactNode;
 }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
@@ -68,51 +86,82 @@ function Field({
         </span>
       )}
     </label>
-  )
+  );
 }
 
 const inputClass = (hasError: boolean) =>
   `min-h-11 w-full border bg-white px-3 py-2 focus:outline-2 focus:outline-blue-900 ${
-    hasError ? 'border-red-600' : 'border-gray-300'
-  }`
+    hasError ? "border-red-600" : "border-gray-300"
+  }`;
 
 export default function AddProductModal({
   existingSkus,
+  initialProduct,
   onSubmit,
   onClose,
 }: {
-  existingSkus: string[]
-  onSubmit: (product: Omit<Product, 'id'>) => void
-  onClose: () => void
+  existingSkus: string[];
+  initialProduct?: Product;
+  onSubmit: (
+    product: Omit<Product, "id" | "stockStatus">,
+  ) => void | Promise<void>;
+  onClose: () => void;
 }) {
-  const [values, setValues] = useState<Values>(emptyValues)
-  const [errors, setErrors] = useState<Errors>({})
+  const [values, setValues] = useState<Values>(emptyValues);
+  const [errors, setErrors] = useState<Errors>({});
+  const [saving, setSaving] = useState(false);
+
+  const isEditing = Boolean(initialProduct);
+
+  useEffect(() => {
+    if (initialProduct) {
+      setValues({
+        name: initialProduct.name,
+        itemID: initialProduct.itemID,
+        category: initialProduct.category,
+        price: String(initialProduct.price),
+        inStock: String(initialProduct.inStock),
+        reOrderAt: String(initialProduct.reOrderAt),
+      });
+    } else {
+      setValues(emptyValues);
+    }
+
+    setErrors({});
+  }, [initialProduct]);
 
   function update(key: keyof Values, value: string) {
-    setValues((prev) => ({ ...prev, [key]: value }))
-    // Clear that field's error as soon as the user edits it
-    setErrors((prev) => ({ ...prev, [key]: undefined }))
+    setValues((prev) => ({ ...prev, [key]: value }));
+    setErrors((prev) => ({ ...prev, [key]: undefined }));
   }
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
 
-    const found = validate(values, existingSkus)
-    setErrors(found)
-    if (Object.keys(found).length > 0) return
+    const found = validate(values, existingSkus, initialProduct?.itemID);
 
-    onSubmit({
-      name: values.name.trim(),
-      itemID: values.itemID.trim().toUpperCase(),
-      category: values.category,
-      price: Number(values.price),
-      inStock: Number(values.inStock),
-      reOrderAt: Number(values.reOrderAt),
-    })
+    setErrors(found);
+
+    if (Object.keys(found).length > 0) return;
+
+    setSaving(true);
+
+    try {
+      await onSubmit({
+        name: values.name.trim(),
+        itemID: values.itemID.trim().toUpperCase(),
+        category: values.category,
+        price: Number(values.price),
+        inStock: Number(values.inStock),
+        reOrderAt: Number(values.reOrderAt),
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <Modal title="Add product" onClose={onClose}>
+    <Modal title={isEditing ? "Edit product" : "Add product"} onClose={onClose}>
       <form
         onSubmit={handleSubmit}
         noValidate
@@ -122,7 +171,7 @@ export default function AddProductModal({
           <input
             data-autofocus
             value={values.name}
-            onChange={(e) => update('name', e.target.value)}
+            onChange={(e) => update("name", e.target.value)}
             aria-invalid={!!errors.name}
             className={inputClass(!!errors.name)}
           />
@@ -132,16 +181,16 @@ export default function AddProductModal({
           <Field label="SKU" error={errors.itemID}>
             <input
               value={values.itemID}
-              onChange={(e) => update('itemID', e.target.value)}
+              onChange={(e) => update("itemID", e.target.value)}
               aria-invalid={!!errors.itemID}
-              className={`${inputClass(!!errors.itemID)} font-mono uppercase`}
+              className={`${inputClass(!!errors.itemID)} font-mono uppercase no-spinner`}
             />
           </Field>
 
           <Field label="Category" error={errors.category}>
             <select
               value={values.category}
-              onChange={(e) => update('category', e.target.value)}
+              onChange={(e) => update("category", e.target.value)}
               aria-invalid={!!errors.category}
               className={inputClass(!!errors.category)}
             >
@@ -163,22 +212,25 @@ export default function AddProductModal({
               min="0"
               step="0.01"
               value={values.price}
-              onChange={(e) => update('price', e.target.value)}
+              onChange={(e) => update("price", e.target.value)}
               aria-invalid={!!errors.price}
-              className={`${inputClass(!!errors.price)} font-mono`}
+              className={`${inputClass(!!errors.price)} font-mono no-spinner`}
             />
           </Field>
 
-          <Field label="Opening stock" error={errors.inStock}>
+          <Field
+            label={isEditing ? "Stock quantity" : "Opening stock"}
+            error={errors.inStock}
+          >
             <input
               type="number"
               inputMode="numeric"
               min="0"
               step="1"
               value={values.inStock}
-              onChange={(e) => update('inStock', e.target.value)}
+              onChange={(e) => update("inStock", e.target.value)}
               aria-invalid={!!errors.inStock}
-              className={`${inputClass(!!errors.inStock)} font-mono`}
+              className={`${inputClass(!!errors.inStock)} font-mono no-spinner`}
             />
           </Field>
 
@@ -189,9 +241,9 @@ export default function AddProductModal({
               min="0"
               step="1"
               value={values.reOrderAt}
-              onChange={(e) => update('reOrderAt', e.target.value)}
+              onChange={(e) => update("reOrderAt", e.target.value)}
               aria-invalid={!!errors.reOrderAt}
-              className={`${inputClass(!!errors.reOrderAt)} font-mono`}
+              className={`${inputClass(!!errors.reOrderAt)} font-mono no-spinner`}
             />
           </Field>
         </div>
@@ -200,13 +252,20 @@ export default function AddProductModal({
           <button
             type="button"
             onClick={onClose}
-            className="min-h-11 cursor-pointer rounded border border-gray-300 bg-white px-4 py-2 font-bold hover:bg-stone-100"
+            disabled={saving}
+            className="min-h-11 cursor-pointer rounded border border-gray-300 bg-white px-4 py-2 font-bold hover:bg-stone-100 disabled:opacity-50"
           >
             Cancel
           </button>
-          <Button type="submit" Label="Save product" />
+
+          <Button
+            type="submit"
+            Label={
+              saving ? "Saving..." : isEditing ? "Save changes" : "Save product"
+            }
+          />
         </div>
       </form>
     </Modal>
-  )
+  );
 }

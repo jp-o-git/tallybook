@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+psycopg2-binary
+dotenv
+pydantic
+SQLAlchemy==2.0.51
+alembic==1.16.5

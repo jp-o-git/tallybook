@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 h1 {
   font-family: Georgia, serif;
@@ -25,4 +25,22 @@ p {
 
 .btn-dark-blue:hover {
   background-color: #013b75;
+}
+
+.nbg-dark-blue {
+  color: #002244;
+}
+
+.nbg-dark-blue:hover {
+  color: #013b75;
+}
+
+.no-spinner::-webkit-inner-spin-button,
+.no-spinner::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.no-spinner {
+  -moz-appearance: textfield;
 }
