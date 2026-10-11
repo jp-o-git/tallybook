@@ -1,83 +1,68 @@
-import PageLabel from '../components/PageLabel'
-import Button from '../components/Button'
-import Dropdown from '../components/Dropdown'
-import SearchBar from '../components/SearchBar'
-import Table, { type Order } from '../components/Table'
+import PageLabel from "../components/PageLabel";
+import Button from "../components/Button";
+import Dropdown from "../components/Dropdown";
+import SearchBar from "../components/SearchBar";
+import Table, { type Order } from "../components/Table";
+import { getOrders, updateOrderStatus } from "../services/orders";
 
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-
-// Temporary mock data. Later this comes from a useOrders() hook.
-const orders: Order[] = [
-  {
-    id: 1,
-    orderNumber: '#2024-0805',
-    customer: 'Amelia Torres',
-    createdAt: '2024-08-05',
-    total: 324,
-    status: 'Fulfilled',
-  },
-  {
-    id: 2,
-    orderNumber: '#2024-0804',
-    customer: 'Lito Gonzales',
-    createdAt: '2024-08-04',
-    total: 690,
-    status: 'Pending',
-  },
-  {
-    id: 3,
-    orderNumber: '#2024-0803',
-    customer: 'Rosa Reyes',
-    createdAt: '2024-08-03',
-    total: 260.3,
-    status: 'Cancelled',
-  },
-  {
-    id: 4,
-    orderNumber: '#2024-0802',
-    customer: 'Juan Dela Cruz',
-    createdAt: '2024-08-02',
-    total: 589.75,
-    status: 'Paid',
-  },
-  {
-    id: 5,
-    orderNumber: '#2024-0801',
-    customer: 'Maria Santos',
-    createdAt: '2024-08-01',
-    total: 1095,
-    status: 'Fulfilled',
-  },
-]
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function OrdersPage() {
-  const navigate = useNavigate()
-  const [status, setStatus] = useState('all')
-  const [search, setSearch] = useState('')
+  const navigate = useNavigate();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState("all");
+  const [search, setSearch] = useState("");
+
+  const handleStatusChange = async (order: Order, status: Order["status"]) => {
+    try {
+      await updateOrderStatus(order.orderNumber, status);
+
+      const updatedOrders = await getOrders();
+      setOrders(updatedOrders);
+    } catch (error) {
+      console.error("Failed to update order status:", error);
+      alert("Failed to update order status. Please try again.");
+    }
+  };
+
+  async function load() {
+    try {
+      setLoading(true);
+      setError(null);
+      setOrders(await getOrders());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load orders.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
 
   const visible = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = search.trim().toLowerCase();
 
-    return orders
-      .filter((o) => {
-        const matchesStatus =
-          status === 'all' || o.status.toLowerCase() === status
-        const matchesText =
-          q === '' ||
-          o.customer.toLowerCase().includes(q) ||
-          o.orderNumber.toLowerCase().includes(q)
+    return orders.filter((o) => {
+      const matchesStatus =
+        status === "all" || o.status.toLowerCase() === status;
+      const matchesText =
+        q === "" ||
+        o.customer.toLowerCase().includes(q) ||
+        o.orderNumber.toLowerCase().includes(q);
 
-        return matchesStatus && matchesText
-      })
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)) // newest first
-  }, [search, status])
+      return matchesStatus && matchesText;
+    });
+  }, [orders, search, status]);
 
   return (
     <section>
       <PageLabel Heading="Orders" SubHeading="Sales" />
 
-      {/* Toolbar: filters on the left, primary action on the right */}
       <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-4 sm:max-w-2xl sm:flex-1 sm:flex-row sm:items-end">
           <div className="sm:flex-1">
@@ -89,29 +74,53 @@ export default function OrdersPage() {
               value={status}
               onChange={setStatus}
               options={[
-                { value: 'all', label: 'All statuses' },
-                { value: 'pending', label: 'Pending' },
-                { value: 'paid', label: 'Paid' },
-                { value: 'fulfilled', label: 'Fulfilled' },
-                { value: 'cancelled', label: 'Cancelled' },
+                { value: "all", label: "All statuses" },
+                { value: "pending", label: "Pending" },
+                { value: "paid", label: "Paid" },
+                { value: "fulfilled", label: "Fulfilled" },
+                { value: "cancelled", label: "Cancelled" },
               ]}
             />
           </div>
         </div>
 
-        <Button Label="New Order" onClick={() => navigate('/orders/new')} />
+        <Button Label="New Order" onClick={() => navigate("/orders/new")} />
       </div>
 
-      {/* Order list */}
       <div className="mt-6">
-        {visible.length === 0 ? (
+        {loading ? (
+          <p className="border-y border-gray-300 py-10 text-center text-gray-500">
+            Loading orders…
+          </p>
+        ) : error ? (
+          <div
+            role="alert"
+            className="border-y border-gray-300 py-10 text-center"
+          >
+            <p className="text-red-700">Could not load orders: {error}</p>
+            <button
+              type="button"
+              onClick={load}
+              className="mt-3 min-h-11 cursor-pointer underline"
+            >
+              Try again
+            </button>
+          </div>
+        ) : visible.length === 0 ? (
           <p className="border-y border-gray-300 py-10 text-center text-gray-500">
             No orders match your search.
           </p>
         ) : (
-          <Table type="orders" items={visible} />
+          <Table
+            type="orders"
+            items={visible}
+            onOrderClick={(order) =>
+              navigate(`/orders/${encodeURIComponent(order.orderNumber)}`)
+            }
+            onStatusChange={handleStatusChange}
+          />
         )}
       </div>
     </section>
-  )
+  );
 }

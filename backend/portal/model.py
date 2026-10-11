@@ -1,23 +1,45 @@
 import uuid
+from datetime import datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    computed_field,
+    field_validator,
+)
 
-Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+ShortText = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)
+]
 Sku = Annotated[
     str,
     StringConstraints(strip_whitespace=True, to_upper=True, min_length=1, max_length=40),
 ]
 
 
+# ---------- Products ----------
+
+
 class ProductCreate(BaseModel):
     sku: Sku
-    products: Text
-    category: Text
+    products: ShortText
+    category: ShortText
     price: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
     stocks: int = Field(default=0, ge=0)
     reorder_at: int = Field(default=0, ge=0)
+
+
+class ProductUpdate(BaseModel):
+    sku: Sku | None = None
+    products: ShortText | None = None
+    category: ShortText | None = None
+    price: Decimal | None = Field(default=None, gt=0, max_digits=10, decimal_places=2)
+    stocks: int | None = Field(default=None, ge=0)
+    reorder_at: int | None = Field(default=None, ge=0)
 
 
 class ProductOut(BaseModel):
@@ -30,7 +52,6 @@ class ProductOut(BaseModel):
     price: float
     stocks: int
     reorder_at: int
-    stock_status: str
 
     @field_validator("price", mode="before")
     @classmethod
@@ -38,10 +59,46 @@ class ProductOut(BaseModel):
         # Pydantic would send Decimal as a string. The frontend wants a number.
         return float(v)
 
-class ProductUpdate(BaseModel):
-    sku: str | None = None
-    products: str | None = None
-    category: str | None = None
-    price: float | None = Field(default=None, gt=0)
-    stocks: int | None = Field(default=None, ge=0)
-    reorder_at: int | None = Field(default=None, ge=0)
+    @computed_field
+    @property
+    def stock_status(self) -> str:
+        if self.stocks == 0:
+            return "Out of Stock"
+        if self.stocks <= self.reorder_at:
+            return "Low Stock"
+        return "In Stock"
+
+
+#--------- Orders ----------
+
+OrderStatus = Literal["Pending", "Paid", "Fulfilled", "Cancelled"]
+
+
+class OrderItemIn(BaseModel):
+    product_id: uuid.UUID
+    quantity: int = Field(ge=1)
+
+class OrderCreate(BaseModel):
+    customer_name: str
+    items: list[OrderItemIn] = Field(min_length=1)
+    status: Literal["Pending", "Paid"] = "Pending"
+
+class StatusUpdate(BaseModel):
+    status: Literal["Paid", "Fulfilled", "Cancelled"]
+
+
+class OrderItemOut(BaseModel):
+    product_id: uuid.UUID
+    product_name: str
+    quantity: int
+    unit_price: float
+    line_total: float
+
+
+class OrderOut(BaseModel):
+    order_number: str
+    customer_name: str
+    status: OrderStatus
+    total: float
+    created_at: datetime
+    items: list[OrderItemOut]

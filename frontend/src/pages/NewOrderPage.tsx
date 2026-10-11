@@ -1,116 +1,178 @@
-import { useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
-import PageLabel from '../components/PageLabel'
-import Button from '../components/Button'
-import SearchBar from '../components/SearchBar'
-import type { Product } from '../components/Table'
-import { mockProducts } from '../data/mock/product'
-import { money } from '../lib/format'
+import PageLabel from "../components/PageLabel";
+import Button from "../components/Button";
+import SearchBar from "../components/SearchBar";
+import type { Product } from "../components/Table";
+import { getProducts } from "../services/products";
+import { createOrder } from "../services/orders";
+import { money } from "../lib/format";
 
-type Line = { id: number; qty: number }
+type Line = { id: Product["id"]; qty: number };
 
 const stepperClass =
-  'flex size-11 cursor-pointer items-center justify-center border border-gray-300 text-base text-stone-900 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40 lg:size-8'
+  "flex size-11 cursor-pointer items-center justify-center border border-gray-300 text-base text-stone-900 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40 lg:size-8";
 
 export default function NewOrderPage() {
-  const navigate = useNavigate()
-  const products = mockProducts // later: const { data = [] } = useProducts()
-  const receiptRef = useRef<HTMLElement>(null)
+  const navigate = useNavigate();
+  const receiptRef = useRef<HTMLElement>(null);
 
-  const [customer, setCustomer] = useState('')
-  const [search, setSearch] = useState('')
-  const [lines, setLines] = useState<Line[]>([])
-  const [customerError, setCustomerError] = useState('')
-  const [itemsError, setItemsError] = useState('')
-  const [placedOn] = useState(() => new Date())
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [customer, setCustomer] = useState("");
+  const [search, setSearch] = useState("");
+  const [lines, setLines] = useState<Line[]>([]);
+  const [customerError, setCustomerError] = useState("");
+  const [itemsError, setItemsError] = useState("");
+  const [placing, setPlacing] = useState(false);
+  const [placeError, setPlaceError] = useState("");
+  const [placedOn] = useState(() => new Date());
+
+  async function loadProducts(): Promise<Product[] | null> {
+    try {
+      setLoading(true);
+      setLoadError(null);
+
+      const data = await getProducts();
+      const mapped: Product[] = data.map((p) => ({
+        id: p.id,
+        itemID: p.sku,
+        name: p.products,
+        category: p.category,
+        price: Number(p.price),
+        inStock: p.stocks,
+        reOrderAt: p.reorder_at,
+        stockStatus: p.stock_status,
+      }));
+
+      setProducts(mapped);
+      return mapped;
+    } catch (err) {
+      setLoadError(
+        err instanceof Error ? err.message : "Could not load products.",
+      );
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
 
   const byId = useMemo(
     () => new Map(products.map((p) => [p.id, p])),
     [products],
-  )
+  );
 
   const visible = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = search.trim().toLowerCase();
 
     return products.filter(
       (p) =>
-        q === '' ||
+        q === "" ||
         p.name.toLowerCase().includes(q) ||
         p.itemID.toLowerCase().includes(q),
-    )
-  }, [products, search])
+    );
+  }, [products, search]);
 
   // Receipt lines: each cart line joined with its product and a line total
   const receiptLines = lines.flatMap((line) => {
-    const product = byId.get(line.id)
+    const product = byId.get(line.id);
     return product
       ? [{ ...line, product, total: product.price * line.qty }]
-      : []
-  })
-  const total = receiptLines.reduce((sum, l) => sum + l.total, 0)
-  const itemCount = receiptLines.reduce((sum, l) => sum + l.qty, 0)
+      : [];
+  });
+  const total = receiptLines.reduce((sum, l) => sum + l.total, 0);
+  const itemCount = receiptLines.reduce((sum, l) => sum + l.qty, 0);
 
   function addProduct(product: Product) {
-    setItemsError('')
+    setItemsError("");
     setLines((prev) => {
-      const existing = prev.find((l) => l.id === product.id)
+      const existing = prev.find((l) => l.id === product.id);
 
       if (!existing) {
         return product.inStock > 0
           ? [...prev, { id: product.id, qty: 1 }]
-          : prev
+          : prev;
       }
 
       return prev.map((l) =>
         l.id === product.id
           ? { ...l, qty: Math.min(l.qty + 1, product.inStock) }
           : l,
-      )
-    })
+      );
+    });
   }
 
   function changeQty(product: Product, qty: number) {
-    const next = Math.min(Math.max(qty, 1), product.inStock)
+    const next = Math.min(Math.max(qty, 1), product.inStock);
     setLines((prev) =>
       prev.map((l) => (l.id === product.id ? { ...l, qty: next } : l)),
-    )
+    );
   }
 
-  function removeLine(id: number) {
-    setLines((prev) => prev.filter((l) => l.id !== id))
+  function removeLine(id: Product["id"]) {
+    setLines((prev) => prev.filter((l) => l.id !== id));
+  }
+
+  // After the stock numbers change, make the receipt match them
+  function syncLines(fresh: Product[]) {
+    setLines((prev) =>
+      prev.flatMap((l) => {
+        const p = fresh.find((x) => x.id === l.id);
+        if (!p || p.inStock === 0) return [];
+        return [{ ...l, qty: Math.min(l.qty, p.inStock) }];
+      }),
+    );
   }
 
   function scrollToReceipt() {
-    receiptRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    receiptRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function placeOrder() {
-    const nameMissing = customer.trim() === ''
-    const empty = lines.length === 0
+  async function placeOrder() {
+    const nameMissing = customer.trim() === "";
+    const empty = lines.length === 0;
 
-    setCustomerError(nameMissing ? 'Enter the customer name.' : '')
-    setItemsError(empty ? 'Add at least one product.' : '')
-    if (nameMissing || empty) return
+    setCustomerError(nameMissing ? "Enter the customer name." : "");
+    setItemsError(empty ? "Add at least one product." : "");
+    if (nameMissing || empty) return;
 
-    const order = {
-      customerName: customer.trim(),
-      items: receiptLines.map((l) => ({
-        productId: l.product.id,
-        quantity: l.qty,
-        unitPrice: l.product.price,
-      })),
+    try {
+      setPlacing(true);
+      setPlaceError("");
+
+      // No prices are sent. The server looks them up and checks the stock.
+      await createOrder({
+        customerName: customer.trim(),
+        items: lines.map((l) => ({
+          productId: String(l.id),
+          quantity: l.qty,
+        })),
+      });
+
+      navigate("/orders");
+    } catch (err) {
+      setPlaceError(
+        err instanceof Error ? err.message : "Could not place the order.",
+      );
+
+      // Stock may have changed, so refresh the numbers and fix the receipt
+      const fresh = await loadProducts();
+      if (fresh) syncLines(fresh);
+    } finally {
+      setPlacing(false);
     }
-
-    // TODO: replace with a useCreateOrder() mutation. The API checks stock and
-    // saves the order, its items and the stock reductions in one transaction.
-    console.log('place order', order)
-    navigate('/orders')
   }
 
   return (
     // Extra bottom space on mobile so the sticky bar never covers content
-    <section className={itemCount > 0 ? 'pb-24 lg:pb-0' : ''}>
+    <section className={itemCount > 0 ? "pb-24 lg:pb-0" : ""}>
       <div className="flex flex-row items-center justify-between gap-4">
         <PageLabel Heading="New order" SubHeading="Sales" />
         <Link
@@ -130,12 +192,12 @@ export default function NewOrderPage() {
             <input
               value={customer}
               onChange={(e) => {
-                setCustomer(e.target.value)
-                setCustomerError('')
+                setCustomer(e.target.value);
+                setCustomerError("");
               }}
               aria-invalid={!!customerError}
               className={`min-h-11 w-full border bg-white px-3 py-2 focus:outline-2 focus:outline-blue-900 ${
-                customerError ? 'border-red-600' : 'border-gray-300'
+                customerError ? "border-red-600" : "border-gray-300"
               }`}
             />
             {customerError && (
@@ -156,16 +218,36 @@ export default function NewOrderPage() {
             <SearchBar value={search} onChange={setSearch} />
           </div>
 
-          {visible.length === 0 ? (
+          {loading && products.length === 0 ? (
+            <p className="mt-4 border-y border-gray-300 py-10 text-center text-gray-500">
+              Loading products…
+            </p>
+          ) : loadError ? (
+            <div
+              role="alert"
+              className="mt-4 border-y border-gray-300 py-10 text-center"
+            >
+              <p className="text-red-700">
+                Could not load products: {loadError}
+              </p>
+              <button
+                type="button"
+                onClick={() => loadProducts()}
+                className="mt-3 min-h-11 cursor-pointer underline"
+              >
+                Try again
+              </button>
+            </div>
+          ) : visible.length === 0 ? (
             <p className="mt-4 border-y border-gray-300 py-10 text-center text-gray-500">
               No products match your search.
             </p>
           ) : (
             <ul className="mt-4 divide-y divide-gray-300 border-y border-gray-300">
               {visible.map((p) => {
-                const inOrder = lines.find((l) => l.id === p.id)
-                const out = p.inStock === 0
-                const maxed = !!inOrder && inOrder.qty >= p.inStock
+                const inOrder = lines.find((l) => l.id === p.id);
+                const out = p.inStock === 0;
+                const maxed = !!inOrder && inOrder.qty >= p.inStock;
 
                 return (
                   // Mobile: name on top, price/stock + Add underneath.
@@ -185,9 +267,9 @@ export default function NewOrderPage() {
                       <div className="sm:text-right">
                         <p className="font-mono text-sm">{money(p.price)}</p>
                         <p
-                          className={`text-xs ${out ? 'text-red-700' : 'text-gray-500'}`}
+                          className={`text-xs ${out ? "text-red-700" : "text-gray-500"}`}
                         >
-                          {out ? 'Out of stock' : `${p.inStock} available`}
+                          {out ? "Out of stock" : `${p.inStock} available`}
                         </p>
                       </div>
 
@@ -198,11 +280,11 @@ export default function NewOrderPage() {
                         aria-label={`Add ${p.name}`}
                         className="min-h-11 min-w-20 cursor-pointer border border-gray-300 bg-white px-3 text-sm font-bold hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        {maxed ? 'Added' : 'Add'}
+                        {maxed ? "Added" : "Add"}
                       </button>
                     </div>
                   </li>
-                )
+                );
               })}
             </ul>
           )}
@@ -223,16 +305,16 @@ export default function NewOrderPage() {
             <div className="flex justify-between gap-4">
               <span>Date</span>
               <span>
-                {placedOn.toLocaleString('en-PH', {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
+                {placedOn.toLocaleString("en-PH", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
                 })}
               </span>
             </div>
             <div className="flex justify-between gap-4">
               <span>Customer</span>
               <span className="truncate text-right">
-                {customer.trim() || '—'}
+                {customer.trim() || "—"}
               </span>
             </div>
           </div>
@@ -309,8 +391,18 @@ export default function NewOrderPage() {
             </p>
           )}
 
+          {placeError && (
+            <p role="alert" className="mt-3 text-red-700">
+              {placeError}
+            </p>
+          )}
+
           <div className="mt-4 [&>button]:w-full">
-            <Button Label="Place order" onClick={placeOrder} />
+            <Button
+              Label={placing ? "Placing order…" : "Place order"}
+              onClick={placeOrder}
+              disabled={placing}
+            />
           </div>
         </aside>
       </div>
@@ -320,7 +412,7 @@ export default function NewOrderPage() {
         <div className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-between gap-4 border-t border-gray-300 bg-stone-50 px-4 py-3 lg:hidden">
           <div className="font-mono">
             <p className="text-xs text-gray-500">
-              {itemCount} {itemCount === 1 ? 'item' : 'items'}
+              {itemCount} {itemCount === 1 ? "item" : "items"}
             </p>
             <p className="text-lg font-bold">{money(total)}</p>
           </div>
@@ -328,5 +420,5 @@ export default function NewOrderPage() {
         </div>
       )}
     </section>
-  )
+  );
 }

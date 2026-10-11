@@ -1,3 +1,6 @@
+import Dropdown from "../components/Dropdown";
+import { ChevronDown } from "lucide-react";
+
 type StockStatus = "In Stock" | "Low Stock" | "Out of Stock";
 
 export type Product = {
@@ -26,7 +29,12 @@ type TableProps =
       items: Product[];
       onEdit?: (product: Product) => void;
     }
-  | { type: "orders"; items: Order[] };
+  | {
+      type: "orders";
+      items: Order[];
+      onOrderClick?: (order: Order) => void;
+      onStatusChange?: (order: Order, status: Order["status"]) => void;
+    };
 
 type Column = { label: string; right?: boolean; srOnly?: boolean };
 
@@ -50,7 +58,7 @@ const orderColumns: Column[] = [
   { label: "Status" },
 ];
 
-const money = (n: number) => `$${n.toFixed(2)}`;
+const money = (n: number) => `₱${n.toFixed(2)}`;
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-PH", {
@@ -81,7 +89,8 @@ function StatusMark({ label, dot }: { label: string; dot: string }) {
   );
 }
 
-const rowClass = "border-b border-gray-300 last:border-b-0";
+const rowClass =
+  "border-b border-gray-300 last:border-b-0 cursor-pointer transition-colors hover:bg-gray-50";
 const cell = "px-4 py-4";
 const numCell = "px-4 py-4 text-right font-mono";
 
@@ -124,15 +133,78 @@ function ProductRow({
   );
 }
 
-function OrderRow({ order }: { order: Order }) {
+function OrderRow({
+  order,
+  onClick,
+  onStatusChange,
+}: {
+  order: Order;
+  onClick?: (order: Order) => void;
+  onStatusChange?: (order: Order, status: Order["status"]) => void;
+}) {
   return (
-    <tr className={rowClass}>
+    <tr
+      className={rowClass}
+      onClick={() => onClick?.(order)}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick?.(order);
+        }
+      }}
+      tabIndex={onClick ? 0 : undefined}
+      role={onClick ? "link" : undefined}
+      aria-label={onClick ? `View order ${order.orderNumber}` : undefined}
+    >
       <td className={`${cell} font-mono`}>{order.orderNumber}</td>
       <td className={cell}>{order.customer}</td>
       <td className={cell}>{formatDate(order.createdAt)}</td>
       <td className={numCell}>{money(order.total)}</td>
+
       <td className={cell}>
-        <StatusMark label={order.status} dot={orderDots[order.status]} />
+        <div
+          onClick={(event) => event.stopPropagation()}
+          className={`inline-flex items-center rounded-full border px-3 py-1 transition-colors hover:brightness-95 ${
+            order.status === "Pending"
+              ? "border-amber-200 bg-amber-50 text-amber-700"
+              : order.status === "Paid"
+                ? "border-blue-200 bg-blue-50 text-blue-800"
+                : order.status === "Fulfilled"
+                  ? "border-green-200 bg-green-50 text-green-700"
+                  : "border-gray-200 bg-gray-100 text-gray-600"
+          }`}
+        >
+          <span
+            className={`mr-2 size-2 shrink-0 rounded-full ${orderDots[order.status]}`}
+            aria-hidden="true"
+          />
+          <Dropdown
+            value={order.status}
+            onChange={(value) =>
+              onStatusChange?.(order, value as Order["status"])
+            }
+            options={[
+              ...(order.status === "Pending"
+                ? [{ value: "Paid", label: "Paid" }]
+                : []),
+              ...(order.status === "Pending" || order.status === "Paid"
+                ? [{ value: "Cancelled", label: "Cancelled" }]
+                : []),
+              ...(order.status === "Paid"
+                ? [{ value: "Fulfilled", label: "Fulfilled" }]
+                : []),
+              { value: order.status, label: order.status },
+            ]}
+            className="cursor-pointer !min-h-0 !w-auto !rounded-full !appearance-none !border-0 !bg-transparent !px-1 !py-1 !shadow-none text-center text-sm font-medium text-inherit focus:!outline-none focus:!ring-0 focus:!shadow-none"
+          />
+          <ChevronDown
+            size={14}
+            className="ml-1 shrink-0 opacity-70"
+            aria-hidden="true"
+          />
+        </div>
       </td>
     </tr>
   );
@@ -173,7 +245,12 @@ export default function Table(props: TableProps) {
                 <ProductRow key={item.id} item={item} onEdit={props.onEdit} />
               ))
             : props.items.map((order) => (
-                <OrderRow key={order.id} order={order} />
+                <OrderRow
+                  key={order.id}
+                  order={order}
+                  onClick={props.onOrderClick}
+                  onStatusChange={props.onStatusChange}
+                />
               ))}
         </tbody>
       </table>

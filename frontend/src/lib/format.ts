@@ -1,1 +1,1 @@
-export const money = (n: number) => `$${n.toFixed(2)}`
+export const money = (n: number) => `₱${n.toFixed(2)}`
