@@ -1,6 +1,6 @@
 import { apiFetch, responseError } from "./api";
 
-const API_URL = import.meta.env.API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export type ApiProduct = {
   id: string;
