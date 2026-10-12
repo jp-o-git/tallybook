@@ -1,6 +1,5 @@
 import type { Order } from '../components/Table'
-
-const BASE = import.meta.env.VITE_API_URL
+import { apiFetch } from './api'
 
 type OrderDto = {
   order_number: string
@@ -25,7 +24,7 @@ const toOrder = (d: OrderDto): Order => ({
 })
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await apiFetch(path, {
     headers: { 'Content-Type': 'application/json' },
     ...init,
   })
@@ -85,7 +84,7 @@ export async function updateOrderStatus(
 export type OrderDetailsDto = {
   order_number: string;
   customer_name: string;
-  status: string;
+  status: Order["status"];
   total: number;
   created_at: string;
   items: {

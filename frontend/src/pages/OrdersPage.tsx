@@ -30,8 +30,6 @@ export default function OrdersPage() {
 
   async function load() {
     try {
-      setLoading(true);
-      setError(null);
       setOrders(await getOrders());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load orders.");
@@ -40,8 +38,30 @@ export default function OrdersPage() {
     }
   }
 
+  function retryLoad() {
+    setLoading(true);
+    setError(null);
+    void load();
+  }
+
   useEffect(() => {
-    load();
+    let isMounted = true;
+    getOrders()
+      .then((data) => {
+        if (isMounted) setOrders(data);
+      })
+      .catch((err: unknown) => {
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : "Could not load orders.");
+        }
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const visible = useMemo(() => {
@@ -60,16 +80,16 @@ export default function OrdersPage() {
   }, [orders, search, status]);
 
   return (
-    <section>
+    <section className="space-y-6">
       <PageLabel Heading="Orders" SubHeading="Sales" />
 
-      <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-4 sm:max-w-2xl sm:flex-1 sm:flex-row sm:items-end">
-          <div className="sm:flex-1">
+      <div className="panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+          <div>
             <SearchBar value={search} onChange={setSearch} />
           </div>
 
-          <div className="sm:w-56">
+          <div>
             <Dropdown
               value={status}
               onChange={setStatus}
@@ -84,31 +104,31 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        <Button Label="New Order" onClick={() => navigate("/orders/new")} />
+        <Button Label="New order" onClick={() => navigate("/orders/new")} />
       </div>
 
-      <div className="mt-6">
+      <div>
         {loading ? (
-          <p className="border-y border-gray-300 py-10 text-center text-gray-500">
+          <p className="panel empty-state">
             Loading orders…
           </p>
         ) : error ? (
           <div
             role="alert"
-            className="border-y border-gray-300 py-10 text-center"
+            className="panel empty-state"
           >
-            <p className="text-red-700">Could not load orders: {error}</p>
+            <p className="text-rose-700">Could not load orders: {error}</p>
             <button
               type="button"
-              onClick={load}
-              className="mt-3 min-h-11 cursor-pointer underline"
+              onClick={retryLoad}
+              className="mt-4 min-h-10 cursor-pointer rounded-lg px-3 text-sm font-semibold text-blue-800 hover:bg-blue-50"
             >
               Try again
             </button>
           </div>
         ) : visible.length === 0 ? (
-          <p className="border-y border-gray-300 py-10 text-center text-gray-500">
-            No orders match your search.
+          <p className="panel empty-state">
+            {orders.length === 0 ? "No orders yet. Create your first order to see it here." : "No orders match your search."}
           </p>
         ) : (
           <Table

@@ -24,7 +24,7 @@ class Order(Base):
         primary_key=True,
         default=uuid.uuid4,
     )
-    order_number = Column(Text, nullable=False, unique=True)
+    order_number = Column(Text, nullable=False, unique=False)
     customer_name = Column(Text, nullable=False)
 
     product_id = Column(

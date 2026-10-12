@@ -31,10 +31,16 @@ def new_order_number() -> str:
     return f"ORD-{day}-{uuid.uuid4().hex[:6].upper()}"
 
 
-def rows_for(db: Session, order_number: str, lock: bool = False) -> list[Order]:
+def rows_for(
+    db: Session,
+    order_number: str,
+    lock: bool = False,
+) -> list[Order]:
     stmt = (
         select(Order)
-        .where(Order.order_number == order_number)
+        .where(
+            Order.order_number == order_number,
+        )
         .options(selectinload(Order.product))
         .order_by(Order.id)
     )
@@ -76,7 +82,9 @@ def to_receipt(rows: list[Order]) -> OrderOut:
 
 
 @orders.get("", response_model=list[OrderOut])
-def list_orders(db: Session = Depends(get_session)):
+def list_orders(
+    db: Session = Depends(get_session),
+):
     # The 200 most recent receipts, then all of their rows
     recent = (
         select(Order.order_number)
@@ -86,7 +94,9 @@ def list_orders(db: Session = Depends(get_session)):
     )
     rows = db.scalars(
         select(Order)
-        .where(Order.order_number.in_(recent))
+        .where(
+            Order.order_number.in_(recent),
+        )
         .options(selectinload(Order.product))
         .order_by(Order.created_at.desc(), Order.order_number, Order.id)
     ).all()
@@ -99,12 +109,18 @@ def list_orders(db: Session = Depends(get_session)):
 
 
 @orders.get("/{order_number}", response_model=OrderOut)
-def get_order(order_number: str, db: Session = Depends(get_session)):
+def get_order(
+    order_number: str,
+    db: Session = Depends(get_session),
+):
     return to_receipt(rows_for(db, order_number))
 
 
 @orders.post("", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
-def create_order(payload: OrderCreate, db: Session = Depends(get_session)):
+def create_order(
+    payload: OrderCreate,
+    db: Session = Depends(get_session),
+):
     # Merge repeated products into one line
     wanted: dict[uuid.UUID, int] = {}
     for line in payload.items:
@@ -116,7 +132,10 @@ def create_order(payload: OrderCreate, db: Session = Depends(get_session)):
         # same order and can't deadlock.
         products = db.scalars(
             select(Product)
-            .where(Product.id.in_(list(wanted)))
+            .where(
+                Product.id.in_(list(wanted)),
+                Product.is_deleted.is_(False),
+            )
             .order_by(Product.id)
             .with_for_update()
         ).all()
@@ -149,7 +168,7 @@ def create_order(payload: OrderCreate, db: Session = Depends(get_session)):
                     product_id=pid,
                     quantity=qty,
                     unit_price=product.price,
-                    order_status=payload.status,
+                    order_status="Pending",
                     created_at=now,
                 )
             )
@@ -173,7 +192,9 @@ def create_order(payload: OrderCreate, db: Session = Depends(get_session)):
 
 @orders.patch("/{order_number}/status", response_model=OrderOut)
 def update_status(
-    order_number: str, payload: StatusUpdate, db: Session = Depends(get_session)
+    order_number: str,
+    payload: StatusUpdate,
+    db: Session = Depends(get_session),
 ):
     rows = rows_for(db, order_number, lock=True)
     current = rows[0].order_status

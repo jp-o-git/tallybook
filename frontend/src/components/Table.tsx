@@ -1,5 +1,6 @@
 import Dropdown from "../components/Dropdown";
 import { ChevronDown } from "lucide-react";
+import { money } from "../lib/format";
 
 type StockStatus = "In Stock" | "Low Stock" | "Out of Stock";
 
@@ -28,6 +29,7 @@ type TableProps =
       type: "products";
       items: Product[];
       onEdit?: (product: Product) => void;
+      onDelete?: (product: Product) => void;
     }
   | {
       type: "orders";
@@ -47,7 +49,7 @@ const productColumns: Column[] = [
   { label: "Status" },
 ];
 
-// Only added when an onEdit handler is passed in
+// Only added when an onEdit or onDelete handler is passed in
 const actionsColumn: Column = { label: "Actions", right: true, srOnly: true };
 
 const orderColumns: Column[] = [
@@ -57,8 +59,6 @@ const orderColumns: Column[] = [
   { label: "Total", right: true },
   { label: "Status" },
 ];
-
-const money = (n: number) => `₱${n.toFixed(2)}`;
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-PH", {
@@ -89,44 +89,67 @@ function StatusMark({ label, dot }: { label: string; dot: string }) {
   );
 }
 
-const rowClass =
-  "border-b border-gray-300 last:border-b-0 cursor-pointer transition-colors hover:bg-gray-50";
-const cell = "px-4 py-4";
-const numCell = "px-4 py-4 text-right font-mono";
+const rowClass = "border-b border-slate-100 last:border-b-0";
+const cell = "px-4 py-4 align-middle";
+const numCell = "px-4 py-4 text-right align-middle font-mono tabular-nums";
 
 function ProductRow({
   item,
   onEdit,
+  onDelete,
 }: {
   item: Product;
   onEdit?: (product: Product) => void;
+  onDelete?: (product: Product) => void;
 }) {
   return (
     <tr className={rowClass}>
       <td className={cell}>
-        <p className="font-medium">{item.name}</p>
-        <p className="font-mono text-xs text-gray-500">{item.itemID}</p>
+        <p className="font-medium text-slate-900">{item.name}</p>
+        <p className="mt-1 font-mono text-xs text-slate-500">{item.itemID}</p>
       </td>
       <td className={cell}>{item.category}</td>
       <td className={numCell}>{money(item.price)}</td>
       <td className={numCell}>{item.inStock}</td>
       <td className={numCell}>{item.reOrderAt}</td>
       <td className={cell}>
-        <StatusMark
-          label={item.stockStatus}
-          dot={stockStatusColors[item.stockStatus]}
-        />
+        <span
+          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+            item.stockStatus === "In Stock"
+              ? "bg-emerald-50 text-emerald-700"
+              : item.stockStatus === "Low Stock"
+                ? "bg-amber-50 text-amber-700"
+                : "bg-rose-50 text-rose-700"
+          }`}
+        >
+          <StatusMark
+            label={item.stockStatus}
+            dot={stockStatusColors[item.stockStatus]}
+          />
+        </span>
       </td>
-      {onEdit && (
-        <td className="px-2 py-2 text-right">
-          <button
-            type="button"
-            onClick={() => onEdit(item)}
-            aria-label={`Edit ${item.name}`}
-            className="min-h-11 cursor-pointer px-3 underline underline-offset-4 hover:text-blue-800"
-          >
-            Edit
-          </button>
+      {(onEdit || onDelete) && (
+        <td className="whitespace-nowrap px-2 py-2 text-right">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(item)}
+              aria-label={`Edit ${item.name}`}
+              className="min-h-10 cursor-pointer rounded-lg px-3 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+            >
+              Edit
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(item)}
+              aria-label={`Delete ${item.name}`}
+              className="min-h-10 cursor-pointer rounded-lg px-3 text-sm font-semibold text-rose-700 hover:bg-rose-50"
+            >
+              Delete
+            </button>
+          )}
         </td>
       )}
     </tr>
@@ -144,7 +167,7 @@ function OrderRow({
 }) {
   return (
     <tr
-      className={rowClass}
+      className={`${rowClass} ${onClick ? "cursor-pointer focus:bg-blue-50 focus:outline-none" : ""}`}
       onClick={() => onClick?.(order)}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return;
@@ -158,7 +181,9 @@ function OrderRow({
       role={onClick ? "link" : undefined}
       aria-label={onClick ? `View order ${order.orderNumber}` : undefined}
     >
-      <td className={`${cell} font-mono`}>{order.orderNumber}</td>
+      <td className={`${cell} font-mono font-medium text-slate-700`}>
+        {order.orderNumber}
+      </td>
       <td className={cell}>{order.customer}</td>
       <td className={cell}>{formatDate(order.createdAt)}</td>
       <td className={numCell}>{money(order.total)}</td>
@@ -166,7 +191,7 @@ function OrderRow({
       <td className={cell}>
         <div
           onClick={(event) => event.stopPropagation()}
-          className={`inline-flex items-center rounded-full border px-3 py-1 transition-colors hover:brightness-95 ${
+          className={`inline-flex items-center rounded-full border px-2.5 py-1 transition-colors hover:brightness-95 focus-within:ring-2 focus-within:ring-blue-400/40 ${
             order.status === "Pending"
               ? "border-amber-200 bg-amber-50 text-amber-700"
               : order.status === "Paid"
@@ -213,21 +238,21 @@ function OrderRow({
 export default function Table(props: TableProps) {
   const columns =
     props.type === "products"
-      ? props.onEdit
+      ? props.onEdit || props.onDelete
         ? [...productColumns, actionsColumn]
         : productColumns
       : orderColumns;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-y border-gray-300 text-left text-sm">
+    <div className="panel overflow-x-auto">
+      <table className="w-full min-w-[720px] text-left text-sm">
         <thead>
-          <tr className="border-b border-gray-300 text-xs uppercase text-gray-500">
+          <tr className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-[0.08em] text-slate-500">
             {columns.map((col) => (
               <th
                 key={col.label}
                 scope="col"
-                className={`px-4 py-3 font-semibold ${col.right ? "text-right" : ""}`}
+                className={`px-4 py-3.5 font-semibold ${col.right ? "text-right" : ""}`}
               >
                 {col.srOnly ? (
                   <span className="sr-only">{col.label}</span>
@@ -242,7 +267,12 @@ export default function Table(props: TableProps) {
         <tbody>
           {props.type === "products"
             ? props.items.map((item) => (
-                <ProductRow key={item.id} item={item} onEdit={props.onEdit} />
+                <ProductRow
+                  key={item.id}
+                  item={item}
+                  onEdit={props.onEdit}
+                  onDelete={props.onDelete}
+                />
               ))
             : props.items.map((order) => (
                 <OrderRow

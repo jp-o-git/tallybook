@@ -1,20 +1,32 @@
-export default function SearchBar({
-  value,
-  onChange,
-  placeholder = 'Search Products',
-}: {
+import { Search } from 'lucide-react'
+
+type SearchBarProps = {
   value: string
   onChange: (value: string) => void
   placeholder?: string
-}) {
+}
+
+export default function SearchBar({
+  value,
+  onChange,
+  placeholder = 'Search',
+}: SearchBarProps) {
   return (
-    <label className="flex flex-col gap-1 text-sm">
+    <label className="relative block w-full">
+      <span className="sr-only">{placeholder}</span>
+
+      <Search
+        size={18}
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+        aria-hidden="true"
+      />
+
       <input
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="min-h-11 border border-gray-300 bg-white px-3 py-2 focus:outline-2 focus:outline-blue-900"
+        className="field-control min-h-11 w-full !pl-10 pr-3"
       />
     </label>
   )

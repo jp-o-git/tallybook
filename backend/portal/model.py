@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
@@ -102,3 +102,47 @@ class OrderOut(BaseModel):
     total: float
     created_at: datetime
     items: list[OrderItemOut]
+
+#--------Report-------------
+
+class RevenueComparison(BaseModel):
+    previous_day: float
+    change: float
+    change_percent: float | None
+    trend: Literal["up", "down", "unchanged"]
+
+
+class TopSellingItem(BaseModel):
+    product_id: uuid.UUID
+    name: str
+    sku: str
+    units_sold: int
+
+
+class StockAttentionItem(BaseModel):
+    product_id: uuid.UUID
+    name: str
+    sku: str
+    category: str
+    current_stock: int
+    reorder_at: int
+    status: Literal["Low Stock", "Out of Stock"]
+
+
+class DailySalesReport(BaseModel):
+    report_type: Literal["daily_sales"]
+    business_date: date
+    timezone: Literal["Asia/Manila"]
+    generated_at: datetime
+    currency: Literal["PHP"]
+    revenue: float
+    revenue_comparison: RevenueComparison
+    most_purchased_items: list[TopSellingItem]
+    total_orders: int
+    cancelled_orders: int
+    fulfilled_orders: int
+    ongoing_orders: int
+    pending_orders: int
+    paid_orders: int
+    stock_attention_count: int
+    stock_attention: list[StockAttentionItem]

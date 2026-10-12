@@ -17,10 +17,9 @@ export const router = createBrowserRouter([
       { path: "orders", element: <OrdersPage /> },
       { path: "orders/new", element: <NewOrderPage /> },
       {
-        path: "/orders/:orderNumber",
+        path: "orders/:orderNumber",
         element: <OrderDetailsPage />,
       },
-      //   { path: '*', element: <NotFoundPage /> },
     ],
   },
 ]);

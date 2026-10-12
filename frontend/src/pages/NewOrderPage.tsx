@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import PageLabel from "../components/PageLabel";
@@ -6,13 +6,26 @@ import Button from "../components/Button";
 import SearchBar from "../components/SearchBar";
 import type { Product } from "../components/Table";
 import { getProducts } from "../services/products";
+import type { ApiProduct } from "../services/products";
 import { createOrder } from "../services/orders";
 import { money } from "../lib/format";
 
 type Line = { id: Product["id"]; qty: number };
 
+const mapProducts = (data: ApiProduct[]): Product[] =>
+  data.map((p) => ({
+    id: p.id,
+    itemID: p.sku,
+    name: p.products,
+    category: p.category,
+    price: Number(p.price),
+    inStock: p.stocks,
+    reOrderAt: p.reorder_at,
+    stockStatus: p.stock_status,
+  }));
+
 const stepperClass =
-  "flex size-11 cursor-pointer items-center justify-center border border-gray-300 text-base text-stone-900 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40 lg:size-8";
+  "flex size-10 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-base text-slate-800 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 lg:size-8";
 
 export default function NewOrderPage() {
   const navigate = useNavigate();
@@ -31,23 +44,10 @@ export default function NewOrderPage() {
   const [placeError, setPlaceError] = useState("");
   const [placedOn] = useState(() => new Date());
 
-  async function loadProducts(): Promise<Product[] | null> {
+  const loadProducts = useCallback(async (): Promise<Product[] | null> => {
     try {
-      setLoading(true);
-      setLoadError(null);
-
       const data = await getProducts();
-      const mapped: Product[] = data.map((p) => ({
-        id: p.id,
-        itemID: p.sku,
-        name: p.products,
-        category: p.category,
-        price: Number(p.price),
-        inStock: p.stocks,
-        reOrderAt: p.reorder_at,
-        stockStatus: p.stock_status,
-      }));
-
+      const mapped = mapProducts(data);
       setProducts(mapped);
       return mapped;
     } catch (err) {
@@ -58,10 +58,34 @@ export default function NewOrderPage() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  function retryLoadProducts() {
+    setLoading(true);
+    setLoadError(null);
+    void loadProducts();
   }
 
   useEffect(() => {
-    loadProducts();
+    let isMounted = true;
+    getProducts()
+      .then((data) => {
+        if (isMounted) setProducts(mapProducts(data));
+      })
+      .catch((err: unknown) => {
+        if (isMounted) {
+          setLoadError(
+            err instanceof Error ? err.message : "Could not load products.",
+          );
+        }
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const byId = useMemo(
@@ -172,23 +196,23 @@ export default function NewOrderPage() {
 
   return (
     // Extra bottom space on mobile so the sticky bar never covers content
-    <section className={itemCount > 0 ? "pb-24 lg:pb-0" : ""}>
+    <section className={`space-y-6 ${itemCount > 0 ? "pb-24 lg:pb-0" : ""}`}>
       <div className="flex flex-row items-center justify-between gap-4">
         <PageLabel Heading="New order" SubHeading="Sales" />
         <Link
           to="/orders"
-          className="inline-flex min-h-11 items-center px-2 underline underline-offset-4"
+          className="inline-flex min-h-10 items-center rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900"
         >
           Cancel
         </Link>
       </div>
 
       {/* minmax(0,1fr) lets the left column shrink instead of overflowing */}
-      <div className="mt-6 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_24rem]">
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
         {/* Left: customer + product picker */}
-        <div>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-gray-500">Customer name</span>
+        <div className="space-y-5">
+          <label className="panel flex flex-col gap-2 p-5 text-sm sm:p-6">
+            <span className="font-medium text-slate-700">Customer name</span>
             <input
               value={customer}
               onChange={(e) => {
@@ -196,112 +220,111 @@ export default function NewOrderPage() {
                 setCustomerError("");
               }}
               aria-invalid={!!customerError}
-              className={`min-h-11 w-full border bg-white px-3 py-2 focus:outline-2 focus:outline-blue-900 ${
-                customerError ? "border-red-600" : "border-gray-300"
-              }`}
+              placeholder="Enter the customer’s name"
+              className={`field-control ${customerError ? "!border-rose-500 !ring-2 !ring-rose-100" : ""}`}
             />
             {customerError && (
-              <span role="alert" className="text-red-700">
+              <span role="alert" className="text-sm text-rose-700">
                 {customerError}
               </span>
             )}
           </label>
 
-          <div className="mt-10">
-            <p className="text-xs uppercase text-gray-500">
-              Add items to the order
-            </p>
-            <h2 className="text-2xl font-bold Georgia">Choose products</h2>
-          </div>
+          <div className="panel overflow-hidden">
+            <header className="space-y-4 border-b border-slate-100 p-5 sm:p-6">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+                  Add items to the order
+                </p>
+                <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-900">
+                  Choose products
+                </h2>
+              </div>
+              <SearchBar value={search} onChange={setSearch} />
+            </header>
 
-          <div className="mt-4">
-            <SearchBar value={search} onChange={setSearch} />
-          </div>
-
-          {loading && products.length === 0 ? (
-            <p className="mt-4 border-y border-gray-300 py-10 text-center text-gray-500">
-              Loading products…
-            </p>
-          ) : loadError ? (
-            <div
-              role="alert"
-              className="mt-4 border-y border-gray-300 py-10 text-center"
-            >
-              <p className="text-red-700">
-                Could not load products: {loadError}
+            {loading && products.length === 0 ? (
+              <p className="empty-state">Loading products…</p>
+            ) : loadError ? (
+              <div role="alert" className="empty-state">
+                <p className="text-rose-700">
+                  Could not load products: {loadError}
+                </p>
+                <button
+                  type="button"
+                  onClick={retryLoadProducts}
+                  className="mt-4 min-h-10 cursor-pointer rounded-lg px-3 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                >
+                  Try again
+                </button>
+              </div>
+            ) : visible.length === 0 ? (
+              <p className="empty-state">
+                {products.length === 0
+                  ? "No products available to order."
+                  : "No products match your search."}
               </p>
-              <button
-                type="button"
-                onClick={() => loadProducts()}
-                className="mt-3 min-h-11 cursor-pointer underline"
-              >
-                Try again
-              </button>
-            </div>
-          ) : visible.length === 0 ? (
-            <p className="mt-4 border-y border-gray-300 py-10 text-center text-gray-500">
-              No products match your search.
-            </p>
-          ) : (
-            <ul className="mt-4 divide-y divide-gray-300 border-y border-gray-300">
-              {visible.map((p) => {
-                const inOrder = lines.find((l) => l.id === p.id);
-                const out = p.inStock === 0;
-                const maxed = !!inOrder && inOrder.qty >= p.inStock;
+            ) : (
+              <ul className="divide-y divide-slate-100 px-5 sm:px-6">
+                {visible.map((p) => {
+                  const inOrder = lines.find((l) => l.id === p.id);
+                  const out = p.inStock === 0;
+                  const maxed = !!inOrder && inOrder.qty >= p.inStock;
 
-                return (
-                  // Mobile: name on top, price/stock + Add underneath.
-                  // sm and up: everything on one row.
-                  <li
-                    key={p.id}
-                    className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium">{p.name}</p>
-                      <p className="font-mono text-xs text-gray-500">
-                        {p.itemID}
-                      </p>
-                    </div>
-
-                    <div className="flex shrink-0 items-center justify-between gap-4">
-                      <div className="sm:text-right">
-                        <p className="font-mono text-sm">{money(p.price)}</p>
-                        <p
-                          className={`text-xs ${out ? "text-red-700" : "text-gray-500"}`}
-                        >
-                          {out ? "Out of stock" : `${p.inStock} available`}
+                  return (
+                    <li
+                      key={p.id}
+                      className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-900">{p.name}</p>
+                        <p className="mt-1 font-mono text-xs text-slate-500">
+                          {p.itemID}
                         </p>
                       </div>
 
-                      <button
-                        type="button"
-                        disabled={out || maxed}
-                        onClick={() => addProduct(p)}
-                        aria-label={`Add ${p.name}`}
-                        className="min-h-11 min-w-20 cursor-pointer border border-gray-300 bg-white px-3 text-sm font-bold hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        {maxed ? "Added" : "Add"}
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                      <div className="flex shrink-0 items-center justify-between gap-4">
+                        <div className="sm:text-right">
+                          <p className="font-mono text-sm font-medium tabular-nums text-slate-800">
+                            {money(p.price)}
+                          </p>
+                          <p
+                            className={`mt-1 text-xs ${out ? "text-rose-700" : "text-slate-500"}`}
+                          >
+                            {out ? "Out of stock" : `${p.inStock} available`}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={out || maxed}
+                          onClick={() => addProduct(p)}
+                          aria-label={`Add ${p.name}`}
+                          className="min-h-10 min-w-20 cursor-pointer rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {maxed ? "Added" : "Add"}
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         </div>
 
         {/* Right: the receipt */}
         <aside
           ref={receiptRef}
           aria-label="Order receipt"
-          className="mx-auto w-full max-w-md scroll-mt-4 border border-gray-300 bg-white p-6 font-mono text-sm lg:sticky lg:top-6 lg:mx-0 lg:max-h-[calc(100dvh-3rem)] lg:max-w-none lg:self-start lg:overflow-y-auto"
+          className="panel mx-auto w-full max-w-md scroll-mt-4 p-5 font-mono text-sm xl:sticky xl:top-6 xl:max-h-[calc(100dvh-3rem)] xl:max-w-none xl:self-start xl:overflow-y-auto sm:p-6"
         >
           <div className="text-center">
             <p className="text-lg font-bold tracking-widest">TALLYBOOK</p>
-            <p className="text-xs text-gray-500">Order receipt</p>
+            <p className="mt-1 text-xs text-slate-500">Order receipt</p>
           </div>
 
-          <div className="mt-4 space-y-1 border-y border-dashed border-gray-400 py-3 text-xs">
+          <div className="mt-5 space-y-2 border-y border-dashed border-slate-300 py-3 text-xs text-slate-600">
             <div className="flex justify-between gap-4">
               <span>Date</span>
               <span>
@@ -313,29 +336,29 @@ export default function NewOrderPage() {
             </div>
             <div className="flex justify-between gap-4">
               <span>Customer</span>
-              <span className="truncate text-right">
+              <span className="max-w-[65%] truncate text-right text-slate-800">
                 {customer.trim() || "—"}
               </span>
             </div>
           </div>
 
           {receiptLines.length === 0 ? (
-            <p className="py-8 text-center text-gray-500">
+            <p className="py-8 text-center text-slate-500">
               No items yet. Add products from the list.
             </p>
           ) : (
-            <ul className="divide-y divide-dashed divide-gray-300">
+            <ul className="divide-y divide-dashed divide-slate-200">
               {receiptLines.map((line) => (
                 <li key={line.id} className="py-3">
                   <div className="flex justify-between gap-4">
-                    <span className="min-w-0 break-words font-bold">
+                    <span className="min-w-0 break-words font-semibold text-slate-900">
                       {line.product.name}
                     </span>
                     <span className="shrink-0">{money(line.total)}</span>
                   </div>
 
                   {/* flex-wrap: on very narrow screens the controls drop to their own line */}
-                  <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs text-gray-500">
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs text-slate-500">
                     <span>{money(line.product.price)} each</span>
 
                     <div className="flex items-center gap-1">
@@ -346,7 +369,7 @@ export default function NewOrderPage() {
                         onClick={() => changeQty(line.product, line.qty - 1)}
                         className={stepperClass}
                       >
-                        −
+                        -
                       </button>
                       <span className="w-6 text-center text-sm text-stone-900">
                         {line.qty}
@@ -363,7 +386,7 @@ export default function NewOrderPage() {
                       <button
                         type="button"
                         onClick={() => removeLine(line.id)}
-                        className="ml-2 min-h-11 cursor-pointer px-1 underline lg:min-h-0"
+                        className="ml-2 min-h-10 cursor-pointer rounded px-2 font-sans font-medium text-slate-600 hover:bg-slate-100 hover:text-rose-700 xl:min-h-0"
                       >
                         Remove
                       </button>
@@ -374,25 +397,25 @@ export default function NewOrderPage() {
             </ul>
           )}
 
-          <div className="mt-2 border-t border-dashed border-gray-400 pt-3">
-            <div className="flex justify-between text-xs text-gray-500">
+          <div className="mt-2 border-t border-dashed border-slate-300 pt-3">
+            <div className="flex justify-between text-xs text-slate-500">
               <span>Items</span>
               <span>{itemCount}</span>
             </div>
-            <div className="mt-1 flex justify-between text-lg font-bold">
+            <div className="mt-2 flex justify-between text-lg font-bold text-slate-900">
               <span>TOTAL</span>
               <span>{money(total)}</span>
             </div>
           </div>
 
           {itemsError && (
-            <p role="alert" className="mt-3 text-red-700">
+            <p role="alert" className="mt-3 text-rose-700">
               {itemsError}
             </p>
           )}
 
           {placeError && (
-            <p role="alert" className="mt-3 text-red-700">
+            <p role="alert" className="mt-3 text-rose-700">
               {placeError}
             </p>
           )}
@@ -409,7 +432,7 @@ export default function NewOrderPage() {
 
       {/* Mobile and tablet only: running total pinned to the bottom */}
       {itemCount > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-between gap-4 border-t border-gray-300 bg-stone-50 px-4 py-3 lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-between gap-4 border-t border-slate-200 bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgb(15_23_42_/_0.08)] backdrop-blur lg:hidden">
           <div className="font-mono">
             <p className="text-xs text-gray-500">
               {itemCount} {itemCount === 1 ? "item" : "items"}

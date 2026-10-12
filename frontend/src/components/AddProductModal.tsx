@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import Modal from "./Modal";
 import Button from "./Button";
 import type { Product } from "./Table";
@@ -77,11 +77,11 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-sm">
-      <span className="text-gray-500">{label}</span>
+    <label className="flex flex-col gap-1.5 text-sm">
+      <span className="font-medium text-slate-700">{label}</span>
       {children}
       {error && (
-        <span role="alert" className="text-red-700">
+        <span role="alert"         className="text-sm text-rose-700">
           {error}
         </span>
       )}
@@ -90,9 +90,7 @@ function Field({
 }
 
 const inputClass = (hasError: boolean) =>
-  `min-h-11 w-full border bg-white px-3 py-2 focus:outline-2 focus:outline-blue-900 ${
-    hasError ? "border-red-600" : "border-gray-300"
-  }`;
+  `field-control ${hasError ? "!border-rose-500 !ring-2 !ring-rose-100" : ""}`;
 
 export default function AddProductModal({
   existingSkus,
@@ -107,28 +105,22 @@ export default function AddProductModal({
   ) => void | Promise<void>;
   onClose: () => void;
 }) {
-  const [values, setValues] = useState<Values>(emptyValues);
+  const [values, setValues] = useState<Values>(() =>
+    initialProduct
+      ? {
+          name: initialProduct.name,
+          itemID: initialProduct.itemID,
+          category: initialProduct.category,
+          price: String(initialProduct.price),
+          inStock: String(initialProduct.inStock),
+          reOrderAt: String(initialProduct.reOrderAt),
+        }
+      : emptyValues,
+  );
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
 
   const isEditing = Boolean(initialProduct);
-
-  useEffect(() => {
-    if (initialProduct) {
-      setValues({
-        name: initialProduct.name,
-        itemID: initialProduct.itemID,
-        category: initialProduct.category,
-        price: String(initialProduct.price),
-        inStock: String(initialProduct.inStock),
-        reOrderAt: String(initialProduct.reOrderAt),
-      });
-    } else {
-      setValues(emptyValues);
-    }
-
-    setErrors({});
-  }, [initialProduct]);
 
   function update(key: keyof Values, value: string) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -165,7 +157,7 @@ export default function AddProductModal({
       <form
         onSubmit={handleSubmit}
         noValidate
-        className="mt-6 flex flex-col gap-4"
+        className="mt-6 flex flex-col gap-5"
       >
         <Field label="Product name" error={errors.name}>
           <input
@@ -253,13 +245,14 @@ export default function AddProductModal({
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="min-h-11 cursor-pointer rounded border border-gray-300 bg-white px-4 py-2 font-bold hover:bg-stone-100 disabled:opacity-50"
+            className="min-h-11 cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             Cancel
           </button>
 
           <Button
             type="submit"
+            disabled={saving}
             Label={
               saving ? "Saving..." : isEditing ? "Save changes" : "Save product"
             }

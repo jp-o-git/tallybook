@@ -35,18 +35,18 @@ export default function Modal({
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
-      className="m-auto max-h-[90dvh] w-full max-w-lg overflow-y-auto border border-gray-300 bg-stone-50 p-0 text-stone-900 backdrop:bg-black/40 max-sm:m-0 max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none"
+      className="m-auto max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/45 max-sm:m-0 max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none max-sm:rounded-none"
     >
-      <div className="p-6 sm:p-8">
+      <div className="p-5 sm:p-8">
         <div className="flex items-start justify-between gap-4">
-          <h2 id="modal-title" className="text-2xl font-bold">
+          <h2 id="modal-title" className="text-xl font-semibold tracking-tight sm:text-2xl">
             {title}
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="-m-2 flex size-11 cursor-pointer items-center justify-center text-2xl leading-none"
+            className="-mr-2 -mt-2 flex size-11 cursor-pointer items-center justify-center rounded-lg text-2xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-900"
           >
             ×
           </button>

@@ -4,12 +4,14 @@ import Dropdown from "../components/Dropdown";
 import SearchBar from "../components/SearchBar";
 import Table, { type Product } from "../components/Table";
 import AddProductModal from "../components/AddProductModal";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 import { useEffect, useMemo, useState } from "react";
 import {
   getProducts,
   createProduct,
   updateProduct,
+  deleteProduct,
 } from "../services/products";
 
 export default function ProductsPage() {
@@ -20,6 +22,9 @@ export default function ProductsPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Product | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     async function loadProducts() {
@@ -82,7 +87,7 @@ export default function ProductsPage() {
         products: data.name,
         category: data.category,
         price: data.price,
-        stock: data.inStock,
+        stocks: data.inStock,
         reorder_at: data.reOrderAt,
       });
 
@@ -144,17 +149,37 @@ export default function ProductsPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!deleting) return;
+
+    try {
+      setDeleteBusy(true);
+      setDeleteError("");
+
+      await deleteProduct(String(deleting.id));
+
+      setItems((prev) => prev.filter((item) => item.id !== deleting.id));
+      setDeleting(null);
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Could not delete the product.",
+      );
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   return (
-    <section>
+    <section className="space-y-6">
       <PageLabel Heading="Products" SubHeading="Inventory" />
 
-      <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-4 sm:max-w-2xl sm:flex-1 sm:flex-row sm:items-end">
-          <div className="sm:flex-1">
+      <div className="panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+          <div>
             <SearchBar value={search} onChange={setSearch} />
           </div>
 
-          <div className="sm:w-56">
+          <div>
             <Dropdown
               value={category}
               onChange={setCategory}
@@ -167,33 +192,38 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        <Button Label="Add Product" onClick={() => setAdding(true)} />
+        <Button Label="Add product" onClick={() => setAdding(true)} />
       </div>
 
-      <div className="mt-6">
+      <div>
         {loading ? (
-          <p className="border-y border-gray-300 py-10 text-center text-gray-500">
-            Loading products...
-          </p>
+          <p className="panel empty-state">Loading products...</p>
         ) : error ? (
-          <p className="border-y border-red-300 py-10 text-center text-red-600">
+          <p role="alert" className="panel empty-state text-rose-700">
             Failed to load products: {error}
           </p>
         ) : visible.length === 0 ? (
-          <p className="border-y border-gray-300 py-10 text-center text-gray-500">
-            No products match your search.
+          <p className="panel empty-state">
+            {items.length === 0
+              ? "Your inventory is empty. Add your first product to get started."
+              : "No products match your search."}
           </p>
         ) : (
           <Table
             type="products"
             items={visible}
             onEdit={(product) => setEditingProduct(product)}
+            onDelete={(product) => {
+              setDeleteError("");
+              setDeleting(product);
+            }}
           />
         )}
       </div>
 
       {(adding || editingProduct !== null) && (
         <AddProductModal
+          key={editingProduct ? String(editingProduct.id) : "new"}
           existingSkus={items
             .filter((p) => p.id !== editingProduct?.id)
             .map((p) => p.itemID)}
@@ -204,6 +234,29 @@ export default function ProductsPage() {
             setEditingProduct(null);
           }}
         />
+      )}
+
+      {deleting && (
+        <ConfirmDialog
+          title="Delete product"
+          confirmLabel="Delete"
+          busy={deleteBusy}
+          error={deleteError}
+          onConfirm={handleDelete}
+          onClose={() => {
+            if (!deleteBusy) setDeleting(null);
+          }}
+        >
+          <p>
+            <strong>{deleting.name}</strong> will be removed from your stock
+            list and the New Order screen.
+            {deleting.inStock > 0 &&
+              ` It still has ${deleting.inStock} in stock.`}
+          </p>
+          <p className="mt-2 text-gray-600">
+            Past orders keep it, so you can still see who bought it.
+          </p>
+        </ConfirmDialog>
       )}
     </section>
   );
