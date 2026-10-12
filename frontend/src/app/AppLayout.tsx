@@ -9,7 +9,6 @@ import {
   X,
 } from "lucide-react";
 import Button from "../components/Button";
-import { Analytics } from "@vercel/analytics/next";
 
 const links = [
   { to: "/", label: "Overview", icon: LayoutDashboard },
@@ -155,7 +154,6 @@ export default function AppLayout() {
 
       <main className="mx-auto w-full max-w-[1440px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8 lg:py-10">
         <Outlet />
-        <Analytics />
       </main>
     </div>
   );
