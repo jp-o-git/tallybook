@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   BookOpen,
   LayoutDashboard,
@@ -7,64 +7,65 @@ import {
   Package,
   ShoppingBag,
   X,
-} from 'lucide-react'
-import Button from '../components/Button'
+} from "lucide-react";
+import Button from "../components/Button";
+import { Analytics } from "@vercel/analytics/next";
 
 const links = [
-  { to: '/', label: 'Overview', icon: LayoutDashboard },
-  { to: '/products', label: 'Products', icon: Package },
-  { to: '/orders', label: 'Orders', icon: ShoppingBag },
-]
+  { to: "/", label: "Overview", icon: LayoutDashboard },
+  { to: "/products", label: "Products", icon: Package },
+  { to: "/orders", label: "Orders", icon: ShoppingBag },
+];
 
 export default function AppLayout() {
-  const navigate = useNavigate()
-  const [open, setOpen] = useState(false)
-  const navRef = useRef<HTMLElement>(null)
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
 
   const currentActive = ({ isActive }: { isActive: boolean }) =>
     `inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors ${
       isActive
-        ? 'bg-blue-50 text-blue-900'
-        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
-    }`
+        ? "bg-blue-50 text-blue-900"
+        : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+    }`;
 
   const mobileLink = ({ isActive }: { isActive: boolean }) =>
     `flex min-h-12 items-center gap-3 rounded-lg px-3 text-sm font-medium ${
-      isActive ? 'bg-blue-50 text-blue-900' : 'text-slate-700 hover:bg-slate-50'
-    }`
+      isActive ? "bg-blue-50 text-blue-900" : "text-slate-700 hover:bg-slate-50"
+    }`;
 
   // Close the mobile menu on outside click, Escape, scroll, or growing to desktop
   useEffect(() => {
-    if (!open) return
+    if (!open) return;
 
-    const close = () => setOpen(false)
+    const close = () => setOpen(false);
 
     const onPointerDown = (e: PointerEvent) => {
-      if (!navRef.current?.contains(e.target as Node)) close()
-    }
+      if (!navRef.current?.contains(e.target as Node)) close();
+    };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close()
-    }
+      if (e.key === "Escape") close();
+    };
     const onResize = () => {
-      if (window.innerWidth >= 768) close()
-    }
+      if (window.innerWidth >= 768) close();
+    };
 
-    document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    window.addEventListener('scroll', close, { passive: true })
-    window.addEventListener('resize', onResize)
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", close, { passive: true });
+    window.addEventListener("resize", onResize);
 
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('scroll', close)
-      window.removeEventListener('resize', onResize)
-    }
-  }, [open])
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", close);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [open]);
 
   function goToNewOrder() {
-    setOpen(false)
-    navigate('/orders/new')
+    setOpen(false);
+    navigate("/orders/new");
   }
 
   return (
@@ -87,7 +88,9 @@ export default function AppLayout() {
               <span className="block text-lg font-bold tracking-tight text-slate-900">
                 Tallybook
               </span>
-              <span className="hidden text-xs text-slate-500 sm:block">Inventory & sales</span>
+              <span className="hidden text-xs text-slate-500 sm:block">
+                Inventory & sales
+              </span>
             </span>
           </NavLink>
 
@@ -97,7 +100,7 @@ export default function AppLayout() {
               <NavLink
                 key={link.to}
                 to={link.to}
-                end={link.to === '/'}
+                end={link.to === "/"}
                 className={currentActive}
               >
                 <link.icon size={17} strokeWidth={1.8} aria-hidden="true" />
@@ -113,7 +116,7 @@ export default function AppLayout() {
             onClick={() => setOpen((o) => !o)}
             aria-expanded={open}
             aria-controls="mobile-menu"
-            aria-label={open ? 'Close menu' : 'Open menu'}
+            aria-label={open ? "Close menu" : "Open menu"}
             className="flex size-11 cursor-pointer items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 md:hidden"
           >
             {open ? (
@@ -134,7 +137,7 @@ export default function AppLayout() {
               <NavLink
                 key={link.to}
                 to={link.to}
-                end={link.to === '/'}
+                end={link.to === "/"}
                 onClick={() => setOpen(false)}
                 className={mobileLink}
               >
@@ -152,7 +155,8 @@ export default function AppLayout() {
 
       <main className="mx-auto w-full max-w-[1440px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8 lg:py-10">
         <Outlet />
+        <Analytics />
       </main>
     </div>
-  )
+  );
 }
